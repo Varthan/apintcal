@@ -162,7 +162,8 @@
         <div class="form-row">
 			<div>
 				<label for="principal">Principal Amount:</label>
-				<input type="number" id="principal" name="principal" value="1814015" required>
+				<input type="number" id="principal" name="principal" value="1733594" required>
+				<!-- <input type="number" id="principal" name="principal" value="1814015" required> 30-Nov-2024 -->
 			</div>
 			<div>
 				<label for="businessDate">Last Modified Date of the Principal Amount:</label>
@@ -260,7 +261,7 @@
     </div>
 	
     <script>
-		let fixed_date = "30-Nov-2024";
+		let fixed_date = "31-May-2025";
         document.getElementById('businessDate').value = new Date(fixed_date).toLocaleDateString('en-GB', {
             day: '2-digit', month: 'short', year: 'numeric'
         }).replace(/ /g, '-');
@@ -306,20 +307,29 @@
             container.innerHTML = "";
             const numPayments = parseInt(document.getElementById("additionalPayments").value);
             for (let i = 0; i < numPayments; i++) {
+				const mainDiv = document.createElement("div");
+				const subDiv1 = document.createElement("div");
+				const subDiv2 = document.createElement("div");
+				mainDiv.className = "form-row";
+				
                 const dateInput = document.createElement("input");
                 dateInput.type = "text";
                 dateInput.placeholder = "Date (dd-Mmm-yyyy)";
-                dateInput.value = "12-Dec-2024";
-                dateInput.className = "form-group";
+                dateInput.value = "06-Jun-2025";
+                //dateInput.className = "form-group";
 
                 const amountInput = document.createElement("input");
                 amountInput.type = "number";
                 amountInput.placeholder = "Amount";
-				amountInput.value = 1000;
-				amountInput.className = "form-group";
+				amountInput.value = 100000;
+				//amountInput.className = "form-group";
+				
+				subDiv1.appendChild(dateInput);
+				subDiv2.appendChild(amountInput);
+				mainDiv.appendChild(subDiv1);
+				mainDiv.appendChild(subDiv2);
 
-                container.appendChild(dateInput);
-                container.appendChild(amountInput);
+                container.appendChild(mainDiv);
             }
 			
 			if(numPayments > 0) {
@@ -386,7 +396,9 @@
             let previousDate = new Date(businessDate);
 			let totalAdjsutedInt = 0;
 			let paymentIndex = 0;
-            //additionalPayments.sort((a, b) => parseDate(a.date) - parseDate(b.date));
+			
+			if(additionalPayments.length > 0)
+				additionalPayments.sort((a, b) => parseDate(a.date) - parseDate(b.date));
 
             while (outstandingPrincipal > 0 && paymentIndex < 600) {
                 // EMI Payment
@@ -403,7 +415,8 @@
                 // Interest Calculation Date
                 let interestCalcDate = new Date(emiPaymentDate.getFullYear(), emiPaymentDate.getMonth() + 1, 0);
 				let dateDiff1 = 0;
-				let tempOutPrincipal1 = outstandingPrincipal;
+				let tempPayOutPrincipal = 0;
+				let addlPayIntAmount = 0;
                 
 				if(outstandingPrincipal <= emiAmount) {
 					emiAmount = outstandingPrincipal;
@@ -415,6 +428,10 @@
                 while (paymentIndex < additionalPayments.length && parseDate(additionalPayments[paymentIndex].date) <= currentDate) {
                     const ap = additionalPayments[paymentIndex];
 					const addlPayDate = parseDate(ap.date);
+					tempPayOutPrincipal = outstandingPrincipal;
+					const interest = interest_calc(tempPayOutPrincipal, date_diff(previousDate, addlPayDate), interestRate, intCalcType);
+					
+					addlPayIntAmount += interest;
                     outstandingPrincipal -= ap.amount;
                     statement.push({
 						srNo: srNo++,
@@ -423,7 +440,7 @@
                         txnDesc: "ADDITIONAL PAYMENT",
                         crDr: "Dr",
                         amount: ap.amount,
-                        actualInterest: interest_calc(tempOutPrincipal1, date_diff(previousDate, addlPayDate), interestRate, intCalcType).toFixed(2),
+                        actualInterest: interest.toFixed(2),
                         calculatedInterest: "",
                         adjustedInterest: "",
                         outstandingPrincipal: outstandingPrincipal.toFixed(2)
@@ -433,6 +450,7 @@
                 }
 				
 				if (emiPaymentDate > businessDate) {
+					tempPayOutPrincipal = outstandingPrincipal;
 					dateDiff1 = date_diff(previousDate, currentDate);
 					outstandingPrincipal -= emiAmount;
 					totalPrincipalPaid += emiAmount;
@@ -443,7 +461,7 @@
 						txnDesc: 'REPAYMENT',
 						crDr: 'Dr',
 						amount: emiAmount,
-						actualInterest: interest_calc(tempOutPrincipal1, dateDiff1, interestRate, intCalcType).toFixed(2),
+						actualInterest: interest_calc(tempPayOutPrincipal, dateDiff1, interestRate, intCalcType).toFixed(2),
 						calculatedInterest: '',
 						adjustedInterest: '',
 						outstandingPrincipal: outstandingPrincipal.toFixed(2)
@@ -454,12 +472,12 @@
 				if (outstandingPrincipal > 0 && interestCalcDate > businessDate) {
 					// Interest Calculation
 					let dateDiff2 = date_diff(previousDate, interestCalcDate);
-					let interest1 = interest_calc(tempOutPrincipal1, dateDiff1, interestRate, intCalcType);
+					let interest1 = interest_calc(tempPayOutPrincipal, dateDiff1, interestRate, intCalcType);
 					let interest2 = interest_calc(outstandingPrincipal, dateDiff2, interestRate, intCalcType);
-					let interest = interest1 + interest2;
+					let interest = interest1 + interest2 + addlPayIntAmount;
 					let actualInterest = (interestAdjustmentType === 'floor') ? Math.floor(interest) - interestAdjustment : Math.ceil(interest) - interestAdjustment;
 					let adjustedInterest = actualInterest - interest;
-					let tempOutPrincipal = outstandingPrincipal;
+					let tempIntOutPrincipal = outstandingPrincipal;
 
 					outstandingPrincipal += actualInterest;
 					totalInterestPaid += actualInterest;
@@ -471,7 +489,7 @@
 						txnDesc: 'INTEREST',
 						crDr: 'Cr',
 						amount: actualInterest.toFixed(2),
-						actualInterest: interest_calc(tempOutPrincipal, dateDiff2, interestRate, intCalcType).toFixed(2),
+						actualInterest: interest_calc(tempIntOutPrincipal, dateDiff2, interestRate, intCalcType).toFixed(2),
 						calculatedInterest: interest.toFixed(2),
 						adjustedInterest: adjustedInterest.toFixed(2),
 						outstandingPrincipal: outstandingPrincipal.toFixed(2)
